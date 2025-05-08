@@ -1,5 +1,7 @@
 # Image-Segmentation-project-
 
+![ChatGPT Image Apr 13, 2025, 03_44_09 AM](https://github.com/user-attachments/assets/15617c68-eda2-4caa-9794-946d7c9dc31d)
+
 -> Used LandCover.ai dataset with high-resolution aerial images and masks.
 
 -> Split images into 256×256 patches and removed unwanted data background-only patches and kept only useful ones.
@@ -17,3 +19,12 @@
 -> Segmented images into classes: Road, urban, Water, and Forest. and pixel count for each class to calculate percentage coverage.
 
 -> Visualized results with a pie chart showing land cover distribution
+
+![Poster](https://github.com/user-attachments/assets/73c4c44e-ed84-45df-baf3-eac8e31da2b9)
+
+
+
+
+
+
+
