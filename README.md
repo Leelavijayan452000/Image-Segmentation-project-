@@ -1,5 +1,6 @@
 # Image-Segmentation-project-
 -> Used LandCover.ai dataset with high-resolution aerial images and masks.
+
 -> Split images into 256×256 patches and removed unwanted data background-only patches and kept only useful ones.
 -> Normalized image pixel values to the 0–1 range and converted masks into categorical format using onehot encoding.
 -> Applied data augmentation: flipping, rotating, brightness adjustment, and zooming then process  data generator to feed batches of augmented data during training.
