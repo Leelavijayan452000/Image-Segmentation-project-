@@ -1,1 +1,14 @@
-Https..
+Data collection: https://landcover.ai.linuxpolska.com/ ​
+
+The dataset used for this project is the LandCover.ai dataset, which is designed for automatic land cover mapping from aerial imagery. This dataset contains four primary land cover classes:​
+
+
+                                 Buildings​
+                                 Urban​
+                                 Water​
+                                 Roads​
+land cover from Poland, Central Europe​​
+The dataset contain 41 images ​​
+33 orthophotos with 25 cm per pixel resolution (~9000x9500 px) ​​
+8 orthophotos with 50 cm per pixel resolution (~4200x4700 px) ​​
+total area of 216.27 km2 ​
