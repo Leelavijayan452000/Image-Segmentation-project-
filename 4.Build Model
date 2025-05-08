@@ -1,3 +1,12 @@
+
+# Define the model metrics and load the model
+num_train_imgs = len(os.listdir(r'C:/Users/leela/OneDrive/OneDrive - hindustanuniv.ac.in/Desktop/Dataset/data/data_for_keras_aug/train_images/train/'))
+num_val_images = len(os.listdir(r'C:/Users/leela/OneDrive/OneDrive - hindustanuniv.ac.in/Desktop/Dataset/data/data_for_keras_aug/val_images/val/'))
+
+# Parameters for training
+steps_per_epoch = num_train_imgs // batch_size
+val_steps_per_epoch = num_val_images // batch_size
+
 # Define the ConvBlock class
 class ConvBlock(Layer):
     
@@ -77,44 +86,8 @@ outputs = Conv2D(n_classes, kernel_size=1, activation='softmax', name="Final-Out
 model = Model(InputL, outputs, name="DeepLabV3-Plus")
 model.summary()
 
-from tensorflow.keras.utils import plot_model
-# Assuming you already have the model created (model = Model(InputL, PredMask, name="DeepLabV3-Plus"))
 
+from tensorflow.keras.utils import plot_model
 # Plot and save the model architecture as a PNG image
 plot_model(model, to_file="DeepLabV3+.png", show_shapes=True, dpi=96)
 
-# Model Definition
-model = Model(inputs=InputL, outputs=outputs)
-from tensorflow.keras.callbacks import ReduceLROnPlateau
-
-# Reduce learning rate when the metric (e.g., validation loss) has stopped improving
-lr_scheduler = ReduceLROnPlateau(
-    monitor='val_loss',  # You can also monitor 'val_accuracy'
-    factor=0.5,          # Reduce the learning rate by a factor of 0.5
-    patience=3,          # Number of epochs with no improvement after which the learning rate is reduced
-    min_lr=1e-4          # Minimum learning rate
-)
-# Compile the model
-optimizer = Adam(learning_rate=LR)
-model.compile(
-    loss=sm.losses.categorical_focal_jaccard_loss,
-    optimizer=optimizer,
-    metrics=[sm.metrics.iou_score, 'accuracy']
-)
-
-# Callbacks
-callbacks = [
-    lr_scheduler,
-    ModelCheckpoint("DeepLabV3-Plus.h5", save_best_only=True),
-]
-
-# Training with steps_per_epoch and validation_steps, and storing the history
-history = model.fit(
-    train_img_gen, 
-    validation_data=val_img_gen, 
-    epochs=10, 
-    steps_per_epoch=100,  # Adjust this as needed (100-500)
-    validation_steps=val_steps_per_epoch,   # Adjust this as needed (10-50)
-    callbacks=callbacks
-)
-model.save('DeepLabV3-Plus.h5')
