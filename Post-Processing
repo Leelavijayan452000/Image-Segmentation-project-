@@ -1,0 +1,91 @@
+import cv2
+import numpy as np
+from matplotlib import pyplot as plt
+from patchify import patchify, unpatchify
+from PIL import Image
+import segmentation_models as sm
+from sklearn.preprocessing import MinMaxScaler
+from keras.models import load_model
+
+# Initialize scaler and backbone
+scaler = MinMaxScaler()
+BACKBONE = 'resnet50'
+preprocess_input = sm.get_preprocessing(BACKBONE)
+
+# Load and preprocess the input image
+img = cv2.imread(r"C:\Users\leela\OneDrive\OneDrive - hindustanuniv.ac.in\Desktop\Dataset\data\images\M-34-51-C-d-4-1.tif", cv2.IMREAD_UNCHANGED)
+img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Ensure RGB color ordering
+input_img = scaler.fit_transform(img.reshape(-1, img.shape[-1])).reshape(img.shape)
+input_img = preprocess_input(input_img)
+
+# Load and preprocess the original mask
+original_mask = cv2.imread(r"C:\Users\leela\OneDrive\OneDrive - hindustanuniv.ac.in\Desktop\Dataset\data\masks\M-34-51-C-d-4-1.tif", cv2.IMREAD_GRAYSCALE)
+
+# Load the trained model
+model = load_model("DeepLabV3-Plus.h5", compile=False)
+
+# Patch size and number of classes
+patch_size = 256
+n_classes = 4
+
+# Smooth blending prediction function
+def predict_img_with_smooth_windowing(input_img, window_size, subdivisions, nb_classes, pred_func):
+    """
+    Predict tiled patches and blend them smoothly.
+    """
+    step_size = window_size // subdivisions
+    h, w, _ = input_img.shape
+    padded_h = ((h // step_size) + 1) * step_size
+    padded_w = ((w // step_size) + 1) * step_size
+
+    # Initialize output and weight matrices
+    prediction_map = np.zeros((padded_h, padded_w, nb_classes))
+    weight_map = np.zeros((padded_h, padded_w, nb_classes))
+
+    for i in range(0, h, step_size):
+        for j in range(0, w, step_size):
+            # Extract the patch
+            patch = input_img[i:i + window_size, j:j + window_size, :]
+            if patch.shape[0] != window_size or patch.shape[1] != window_size:
+                continue  # Skip incomplete patches
+            
+            patch = np.expand_dims(patch, axis=0)  # Add batch dimension
+            prediction = pred_func(patch)
+            prediction = prediction.squeeze()
+
+            # Accumulate predictions and weights
+            prediction_map[i:i + window_size, j:j + window_size, :] += prediction
+            weight_map[i:i + window_size, j:j + window_size, :] += 1
+
+    # Normalize by weights
+    prediction_map /= weight_map
+    return prediction_map[:h, :w, :]
+
+# Predict using the smooth blending function
+predictions_smooth = predict_img_with_smooth_windowing(
+    input_img,
+    window_size=patch_size,
+    subdivisions=4,
+    nb_classes=n_classes,
+    pred_func=lambda img_batch_subdiv: model.predict(img_batch_subdiv)
+)
+
+# Get the final prediction from model outputs
+final_prediction = np.argmax(predictions_smooth, axis=-1)
+
+# Save prediction and original mask for comparison
+plt.imsave(r'C:\Users\leela\OneDrive\OneDrive - hindustanuniv.ac.in\Desktop\Dataset\data\test_images\M-34-51-C-d-4-1_segmented.png', final_prediction)
+plt.imsave(r'C:\Users\leela\OneDrive\OneDrive - hindustanuniv.ac.in\Desktop\Dataset\data\test_images\M-34-51-C-d-4-1_mask.png', original_mask)
+
+# Visualization for comparison
+plt.figure(figsize=(12, 12))
+plt.subplot(221)
+plt.title('Testing Image')
+plt.imshow(img)  # Display the image in RGB without 'cmap'
+plt.subplot(222)
+plt.title('Testing Mask')
+plt.imshow(original_mask)  # Display the original mask in RGB (if mask has multiple channels, it will be in color)
+plt.subplot(223)
+plt.title('Prediction with smooth blending')
+plt.imshow(final_prediction)  # Display the prediction in RGB (if needed)
+plt.show()
