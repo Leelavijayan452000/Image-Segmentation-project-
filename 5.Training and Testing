@@ -1,0 +1,74 @@
+# Build the DeepLabV3+ Model
+LR = 1e-4 #3
+IMAGE_SIZE = 256
+
+# Input
+InputL = Input(shape=(IMAGE_SIZE, IMAGE_SIZE, 3), name="InputLayer")
+
+# Base Model
+resnet50 = ResNet50(include_top=False, weights='imagenet', input_tensor=InputL)
+
+# ASPP Phase
+DCNN = resnet50.get_layer('conv4_block6_2_relu').output
+ASPP = AtrousSpatialPyramidPooling(DCNN)
+ASPP = UpSampling2D(size=(IMAGE_SIZE//4//ASPP.shape[1], IMAGE_SIZE//4//ASPP.shape[2]), name="AtrousSpatial")(ASPP)
+
+# LLF Phase
+LLF = resnet50.get_layer('conv2_block3_2_relu').output
+LLF = ConvBlock(filters=48, kernel_size=1, name="LLF-ConvBlock")(LLF)
+
+# Combined
+combined = Concatenate(axis=-1, name="Combine-LLF-ASPP")([ASPP, LLF])
+features = ConvBlock(name="Top-ConvBlock-1")(combined)
+features = ConvBlock(name="Top-ConvBlock-2")(features)
+upsample = UpSampling2D(size=(IMAGE_SIZE//features.shape[1], IMAGE_SIZE//features.shape[1]), interpolation='bilinear', name="Top-UpSample")(features)
+
+# Output
+outputs = Conv2D(n_classes, kernel_size=1, activation='softmax', name="Final-Output")(upsample)
+# DeepLabV3+ Model
+model = Model(InputL, outputs, name="DeepLabV3-Plus")
+model.summary()
+
+
+from tensorflow.keras.utils import plot_model
+
+# Assuming you already have the model created (model = Model(InputL, PredMask, name="DeepLabV3-Plus"))
+
+# Plot and save the model architecture as a PNG image
+plot_model(model, to_file="DeepLabV3+.png", show_shapes=True, dpi=96)
+
+# Model Definition
+model = Model(inputs=InputL, outputs=outputs)
+from tensorflow.keras.callbacks import ReduceLROnPlateau
+
+# Reduce learning rate when the metric (e.g., validation loss) has stopped improving
+lr_scheduler = ReduceLROnPlateau(
+    monitor='val_loss',  # You can also monitor 'val_accuracy'
+    factor=0.5,          # Reduce the learning rate by a factor of 0.5
+    patience=3,          # Number of epochs with no improvement after which the learning rate is reduced
+    min_lr=1e-4          # Minimum learning rate
+)
+# Compile the model
+optimizer = Adam(learning_rate=LR)
+model.compile(
+    loss=sm.losses.categorical_focal_jaccard_loss,
+    optimizer=optimizer,
+    metrics=[sm.metrics.iou_score, 'accuracy']
+)
+
+# Callbacks
+callbacks = [
+    lr_scheduler,
+    ModelCheckpoint("DeepLabV3-Plus.h5", save_best_only=True),
+]
+
+# Training with steps_per_epoch and validation_steps, and storing the history
+history = model.fit(
+    train_img_gen, 
+    validation_data=val_img_gen, 
+    epochs=10, 
+    steps_per_epoch=100,  # Adjust this as needed (100-500)
+    validation_steps=val_steps_per_epoch,   # Adjust this as needed (10-50)
+    callbacks=callbacks
+)
+model.save('DeepLabV3-Plus.h5')
