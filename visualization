@@ -1,0 +1,142 @@
+#plot the training and validation IoU and loss at each epoch
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+epochs = range(1, len(loss) + 1)
+plt.plot(epochs, loss, 'y', label='Training loss')
+plt.plot(epochs, val_loss, 'r', label='Validation loss')
+plt.title('Training and validation loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+
+acc = history.history['iou_score']
+val_acc = history.history['val_iou_score']
+
+plt.plot(epochs, acc, 'y', label='Training IoU')
+plt.plot(epochs, val_acc, 'r', label='Validation IoU')
+plt.title('Training and validation IoU')
+plt.xlabel('Epochs')
+plt.ylabel('IoU')
+plt.legend()
+plt.show()
+
+
+from keras.models import load_model
+import numpy as np
+import random
+import matplotlib.pyplot as plt
+from tensorflow.keras.metrics import MeanIoU
+
+# Define ConvBlock class here or ensure it's imported from the module where it's defined
+class ConvBlock(Layer):
+    def __init__(self, filters=256, kernel_size=3, dilation_rate=1, **kwargs):
+        super(ConvBlock, self).__init__(**kwargs)
+        
+        self.filters = filters
+        self.kernel_size = kernel_size
+        self.dilation_rate = dilation_rate
+        
+        self.net = Sequential([
+            Conv2D(filters, kernel_size=kernel_size, padding='same', dilation_rate=dilation_rate, use_bias=False, kernel_initializer='he_normal'),
+            BatchNormalization(), 
+            ReLU()
+        ])
+    
+    def call(self, X):
+        return self.net(X)
+    
+    def get_config(self):
+        base_config = super().get_config()
+        return {
+            **base_config,
+            "filters": self.filters,
+            "kernel_size": self.kernel_size,
+            "dilation_rate": self.dilation_rate,
+        }
+
+# Load the pre-trained model with custom objects
+model = load_model("DeepLabV3-Plus.h5", custom_objects={'ConvBlock': ConvBlock}, compile=False)
+
+batch_size = 8  # Set batch size for testing
+
+# Get a batch of images and their corresponding masks from the validation generator
+test_image_batch, test_mask_batch = val_img_gen.__next__()
+
+# Convert categorical masks to integer for visualization and IoU calculation
+test_mask_batch_argmax = np.argmax(test_mask_batch, axis=3) 
+test_pred_batch = model.predict(test_image_batch)
+test_pred_batch_argmax = np.argmax(test_pred_batch, axis=3)
+
+# Calculate Mean IoU
+n_classes = 4
+IOU_keras = MeanIoU(num_classes=n_classes)  
+IOU_keras.update_state(test_pred_batch_argmax, test_mask_batch_argmax)
+print("Mean IoU =", IOU_keras.result().numpy())
+
+#######################################################
+# View a few images, masks, and corresponding predictions
+img_num = random.randint(0, test_image_batch.shape[0]-1)  # Randomly select an image index
+
+
+plt.figure(figsize=(12, 8))
+plt.subplot(231)
+plt.title('Testing Image')
+plt.imshow(test_image_batch[img_num])
+plt.subplot(232)
+plt.title('Testing Label')
+plt.imshow(test_mask_batch_argmax[img_num])
+plt.subplot(233)
+plt.title('Prediction on test image')
+plt.imshow(test_pred_batch_argmax[img_num])
+plt.show()
+
+
+
+
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+from tensorflow.keras.metrics import MeanIoU
+
+# 1. Pixel Accuracy
+def calculate_pixel_accuracy(predictions, ground_truth):
+    return np.mean(predictions == ground_truth)
+
+pixel_accuracy = calculate_pixel_accuracy(test_pred_batch_argmax.flatten(), test_mask_batch_argmax.flatten())
+print(f'Pixel Accuracy: {pixel_accuracy:.4f}')
+
+# 2. Mean IoU
+n_classes = 5  # Number of classes in your segmentation task
+IOU_keras = MeanIoU(num_classes=n_classes)
+IOU_keras.update_state(test_pred_batch_argmax, test_mask_batch_argmax)
+mean_iou = IOU_keras.result().numpy()
+print(f'Mean IoU: {mean_iou:.4f}')
+
+# 3. F1 Score
+def calculate_f1_score(predictions, ground_truth, n_classes):
+    f1_scores = []
+    for i in range(n_classes):
+        TP = np.sum((predictions == i) & (ground_truth == i))
+        FP = np.sum((predictions == i) & (ground_truth != i))
+        FN = np.sum((predictions != i) & (ground_truth == i))
+        precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+        recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        f1_scores.append(f1)
+    return np.mean(f1_scores)
+
+f1_score = calculate_f1_score(test_pred_batch_argmax.flatten(), test_mask_batch_argmax.flatten(), n_classes)
+print(f'F1 Score: {f1_score:.4f}')
+
+# 4. Confusion Matrix
+conf_matrix = confusion_matrix(test_mask_batch_argmax.flatten(), test_pred_batch_argmax.flatten(), labels=np.arange(n_classes))
+
+# Plotting the Confusion Matrix
+plt.figure(figsize=(10, 7))
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=np.arange(n_classes), yticklabels=np.arange(n_classes))
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.title('Confusion Matrix')
+plt.show()
